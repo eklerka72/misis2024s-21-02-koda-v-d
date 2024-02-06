@@ -1,0 +1,3 @@
+C:/Users/kvale/Desktop/CV/misis2024s-21-02-koda-v-d/build/CMakeFiles/ALL_BUILD.dir
+C:/Users/kvale/Desktop/CV/misis2024s-21-02-koda-v-d/build/CMakeFiles/ZERO_CHECK.dir
+C:/Users/kvale/Desktop/CV/misis2024s-21-02-koda-v-d/build/prj.lab/lab01/CMakeFiles/lab01.dir
