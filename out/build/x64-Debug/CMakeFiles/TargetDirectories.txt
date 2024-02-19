@@ -1,7 +1,0 @@
-C:/Users/kvale/Desktop/CV/misis2024s-21-02-koda-v-d/out/build/x64-Debug/CMakeFiles/edit_cache.dir
-C:/Users/kvale/Desktop/CV/misis2024s-21-02-koda-v-d/out/build/x64-Debug/CMakeFiles/rebuild_cache.dir
-C:/Users/kvale/Desktop/CV/misis2024s-21-02-koda-v-d/out/build/x64-Debug/prj.lab/CMakeFiles/edit_cache.dir
-C:/Users/kvale/Desktop/CV/misis2024s-21-02-koda-v-d/out/build/x64-Debug/prj.lab/CMakeFiles/rebuild_cache.dir
-C:/Users/kvale/Desktop/CV/misis2024s-21-02-koda-v-d/out/build/x64-Debug/prj.lab/lab01/CMakeFiles/lab01.dir
-C:/Users/kvale/Desktop/CV/misis2024s-21-02-koda-v-d/out/build/x64-Debug/prj.lab/lab01/CMakeFiles/edit_cache.dir
-C:/Users/kvale/Desktop/CV/misis2024s-21-02-koda-v-d/out/build/x64-Debug/prj.lab/lab01/CMakeFiles/rebuild_cache.dir
