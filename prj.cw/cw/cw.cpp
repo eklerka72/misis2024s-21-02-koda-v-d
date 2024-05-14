@@ -58,7 +58,7 @@ int main() {
 using namespace cv;
 using namespace std;
 
-Mat src, detected_edges;
+//Mat src, detected_edges;
 int cannyThreshold = 100;
 int ratio = 3;
 int kernel_size = 3;
@@ -73,10 +73,60 @@ Scalar findSquareColor(const Mat& image, const vector<Point>& squareContour)
     return meanColor;
 }
 
+cv::Mat segment(const int COLOR_MIN, const int COLOR_MAX) {
+    Mat src = imread("C:/Users/kvale/Desktop/CV/misis2024s-21-02-koda-v-d/prj.cw/cw/img.jpg"); //Исходное изображение
+    
+    //Переводим в формат HSV
+    Mat hsv = Mat(src.cols, src.rows, 8, 3); //
+    vector<Mat> splitedHsv = vector<Mat>();
+    cvtColor(src, hsv, COLOR_BGR2HSV);
+    split(hsv, splitedHsv);
+    for (int y = 0; y < hsv.cols; y++) {
+        for (int x = 0; x < hsv.rows; x++) {
+
+            // получаем HSV-компоненты пикселя
+            int H = static_cast<int>(splitedHsv[0].at<uchar>(x, y));        // Тон
+            int S = static_cast<int>(splitedHsv[1].at<uchar>(x, y));        // Интенсивность
+            int V = static_cast<int>(splitedHsv[2].at<uchar>(x, y));        // Яркость
+
+            //Если яркость слишком низкая либо Тон не попадает у заданный диапазон, то закрашиваем белым 
+            if ((V < 20) || (H < COLOR_MIN) || (H > COLOR_MAX)) {
+                src.at<Vec3b>(x, y)[0] = 255;
+                src.at<Vec3b>(x, y)[1] = 255;
+                src.at<Vec3b>(x, y)[2] = 255;
+            }
+        }
+    }
+    Mat tmp;
+
+    //Морфологическое замыкание для удаления остаточных шумов.
+    int an = 5;
+    Mat element = getStructuringElement(MORPH_ELLIPSE, Size(an * 2 + 1, an * 2 + 1), Point(an, an));
+    dilate(src, tmp, element);
+    erode(tmp, tmp, element);
+
+    //Переводим изображение в чернобелый формат
+    Mat grayscaleMat;
+    cvtColor(tmp, grayscaleMat, COLOR_BGR2GRAY);
+
+    //Делаем бинарную маску
+    Mat mask(grayscaleMat.size(), grayscaleMat.type());
+    Mat out(src.size(), src.type());
+    threshold(grayscaleMat, mask, 200, 255, THRESH_BINARY_INV);
+
+    //Финальное изображение редварительно красим в белый цвет
+    out = Scalar::all(255);
+    //Копируем зашумленное изображение через маску
+    src.copyTo(out, mask);
+    return out;
+
+}
+
 int main()
 {
+    /*
     // Загрузка изображения
-    src = imread("C:/Users/kvale/Desktop/CV/misis2024s-21-02-koda-v-d/prj.lab/kursovaya/img.jpg");
+    src = imread("C:/Users/kvale/Desktop/CV/misis2024s-21-02-koda-v-d/prj.cw/cw/img.jpg");
     imshow("1", src);
     if (src.empty())
     {
@@ -131,7 +181,34 @@ int main()
     }
 
     // Отображение результата
-    imshow("Detected Squares", src);
+    imshow("Detected Squares", src);*/
+
+
+    //ЦВЕТОВАЯ СИГМЕНТАЦИЯ 
+
+    const int GREEN_MIN = 60;
+    const int GREEN_MAX = 98;
+
+    const int BLUE_MIN =100;
+    const int BLUE_MAX = 127;
+
+    const int YELLOW_MIN = 20;
+    const int YELLOW_MAX = 60;
+
+    Mat img = imread("C:/Users/kvale/Desktop/CV/misis2024s-21-02-koda-v-d/prj.cw/cw/img.jpg"); //Исходное изображение
+    imshow("input", img);
+    
+
+    //Удаляем фон
+    cv::Mat out_green = segment( GREEN_MIN, GREEN_MAX);
+    //imshow("Green segment", out_green);
+
+    cv::Mat out_blue = segment(BLUE_MIN, BLUE_MAX);
+    //imshow("Blue segment", out_blue);
+
+    cv::Mat out_red = segment(YELLOW_MIN, YELLOW_MAX);
+    cv::imshow("Red segment", out_red);
+   
     waitKey(0);
 
     return 0;
