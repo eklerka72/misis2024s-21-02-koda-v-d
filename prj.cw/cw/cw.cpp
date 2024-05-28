@@ -1,215 +1,443 @@
-/*#include <iostream>
+#include <iostream>
+#include <vector>
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
-
-
-int main() {
-    cv::Mat image = cv::imread("C:/Users/kvale/Desktop/CV/misis2024s-21-02-koda-v-d/prj.lab/kursovaya/img.jpg");
-    imshow("Original Image", image);
-
-
-    // Преобразование в градации серого
-    cv::Mat grayImage;
-    cvtColor(image, grayImage, cv::COLOR_BGR2GRAY);
-
-    // Применение фильтра Гаусса для сглаживания
-    cv::Mat blurredImage;
-    GaussianBlur(grayImage, blurredImage, cv::Size(5, 5), 0);
-
-    // Показ обработанного изображения
-    imshow("Processed Image", blurredImage);
-
-    // Применение пороговой обработки для исключения черного цвета (порог = 30)
-    cv::Mat binaryImage;
-    threshold(blurredImage, binaryImage, 30, 255, cv::THRESH_BINARY);
-
-    // Обнаружение границ с помощью оператора Canny
-    cv::Mat edges;
-    Canny(blurredImage, edges, 50, 150);
-
-    // Показ изображения с обнаруженными границами
-    cv::imshow("Edges", edges);
-
-    cv::waitKey(0);
-
-    return 0;
-}*/
-
-/*
-    // Преобразование изображения в оттенки серого
-    cvtColor(src, detected_edges, COLOR_BGR2GRAY);
-    imshow("2", detected_edges);
-
-    // Сглаживание изображения
-    GaussianBlur(detected_edges, detected_edges, Size(3, 3), 0);
-    imshow("3", detected_edges);
-
-    // Обнаружение границ с использованием оператора Canny
-    Canny(detected_edges, detected_edges, cannyThreshold, cannyThreshold * 3, kernel_size);
-    imshow("4", detected_edges);*/
-
-#include "opencv2/imgproc/imgproc.hpp"
-#include "opencv2/imgcodecs.hpp"
-#include "opencv2/highgui/highgui.hpp"
-#include <iostream>
-
+//---------------- Name space ---------------------------------------
 using namespace cv;
 using namespace std;
 
-//Mat src, detected_edges;
-int cannyThreshold = 100;
-int ratio = 3;
-int kernel_size = 3;
+// 5-Dimensional Point
+class Point5D {
+public:
+	float x;			// Spatial value
+	float y;			// Spatial value
+	float l;			// Lab value
+	float a;			// Lab value
+	float b;			// Lab value
+public:
+	Point5D();													// Constructor
+	~Point5D();													// Destructor
+	void PointLab();											// Scale the OpenCV Lab color to Lab range
+	void PointRGB();											// Sclae the Lab color to OpenCV range that can be used to transform to RGB
+	void MSPoint5DAccum(Point5D);								// Accumulate points
+	void MSPoint5DCopy(Point5D);								// Copy a point
+	float MSPoint5DColorDistance(Point5D);						// Compute color space distance between two points
+	float MSPoint5DSpatialDistance(Point5D);					// Compute spatial space distance between two points
+	void MSPoint5DScale(float);									// Scale point
+	void MSPOint5DSet(float, float, float, float, float);		// Set point value
+	void Print();												// Print 5D point
+};
 
-// Функция для нахождения цвета квадратика на основе среднего цвета внутри контура
-Scalar findSquareColor(const Mat& image, const vector<Point>& squareContour)
-{
-    Rect squareRect = boundingRect(squareContour); // Определение ограничивающего прямоугольника квадратика
-    Mat roi = image(squareRect); // Выделение области интереса (ROI) для квадратика
-    Scalar meanColor = mean(roi); // Расчет среднего цвета внутри ROI
+class MeanShift {
+public:
+	float hs;				// spatial radius
+	float hr;				// color radius
+	vector<Mat> IMGChannels;
+public:
+	MeanShift(float, float);									// Constructor for spatial bandwidth and color bandwidth
+	void MSFiltering(Mat&);										// Mean Shift Filtering
+	void MSSegmentation(Mat&);									// Mean Shift Segmentation
+};
 
-    return meanColor;
+//---------------- Definition ---------------------------------------
+#define MS_MAX_NUM_CONVERGENCE_STEPS	5										// up to 10 steps are for convergence
+#define MS_MEAN_SHIFT_TOL_COLOR			0.3										// minimum mean color shift change
+#define MS_MEAN_SHIFT_TOL_SPATIAL		0.3										// minimum mean spatial shift change
+const int dxdy[][2] = { {-1,-1},{-1,0},{-1,1},{0,-1},{0,1},{1,-1},{1,0},{1,1} };	// Region Growing
+
+// Constructor
+Point5D::Point5D() {
+	x = -1;
+	y = -1;
 }
 
-cv::Mat segment(const int COLOR_MIN, const int COLOR_MAX) {
-    Mat src = imread("C:/Users/kvale/Desktop/CV/misis2024s-21-02-koda-v-d/prj.cw/cw/img.jpg"); //Исходное изображение
-    
-    //Переводим в формат HSV
-    Mat hsv = Mat(src.cols, src.rows, 8, 3); //
-    vector<Mat> splitedHsv = vector<Mat>();
-    cvtColor(src, hsv, COLOR_BGR2HSV);
-    split(hsv, splitedHsv);
-    for (int y = 0; y < hsv.cols; y++) {
-        for (int x = 0; x < hsv.rows; x++) {
-
-            // получаем HSV-компоненты пикселя
-            int H = static_cast<int>(splitedHsv[0].at<uchar>(x, y));        // Тон
-            int S = static_cast<int>(splitedHsv[1].at<uchar>(x, y));        // Интенсивность
-            int V = static_cast<int>(splitedHsv[2].at<uchar>(x, y));        // Яркость
-
-            //Если яркость слишком низкая либо Тон не попадает у заданный диапазон, то закрашиваем белым 
-            if ((V < 20) || (H < COLOR_MIN) || (H > COLOR_MAX)) {
-                src.at<Vec3b>(x, y)[0] = 255;
-                src.at<Vec3b>(x, y)[1] = 255;
-                src.at<Vec3b>(x, y)[2] = 255;
-            }
-        }
-    }
-    Mat tmp;
-
-    //Морфологическое замыкание для удаления остаточных шумов.
-    int an = 5;
-    Mat element = getStructuringElement(MORPH_ELLIPSE, Size(an * 2 + 1, an * 2 + 1), Point(an, an));
-    dilate(src, tmp, element);
-    erode(tmp, tmp, element);
-
-    //Переводим изображение в чернобелый формат
-    Mat grayscaleMat;
-    cvtColor(tmp, grayscaleMat, COLOR_BGR2GRAY);
-
-    //Делаем бинарную маску
-    Mat mask(grayscaleMat.size(), grayscaleMat.type());
-    Mat out(src.size(), src.type());
-    threshold(grayscaleMat, mask, 200, 255, THRESH_BINARY_INV);
-
-    //Финальное изображение редварительно красим в белый цвет
-    out = Scalar::all(255);
-    //Копируем зашумленное изображение через маску
-    src.copyTo(out, mask);
-    return out;
-
+// Destructor
+Point5D::~Point5D() {
 }
 
-int main()
-{
-    /*
-    // Загрузка изображения
-    src = imread("C:/Users/kvale/Desktop/CV/misis2024s-21-02-koda-v-d/prj.cw/cw/img.jpg");
-    imshow("1", src);
-    if (src.empty())
-    {
-        cout << "Failed to load image" << endl;
-        return -1;
-    }
-    // Преобразование в градации серого
-    cv::Mat grayImage;
-    cvtColor(src, grayImage, cv::COLOR_BGR2GRAY);
+// Scale the OpenCV Lab color to Lab range
+void Point5D::PointLab() {
+	l = l * 100 / 255;
+	a = a - 128;
+	b = b - 128;
+}
 
-    // Применение фильтра Гаусса для сглаживания
-    cv::Mat blurredImage;
-    GaussianBlur(grayImage, blurredImage, cv::Size(5, 5), 0);
+// Sclae the Lab color to OpenCV range that can be used to transform to RGB
+void Point5D::PointRGB() {
+	l = l * 255 / 100;
+	a = a + 128;
+	b = b + 128;
+}
 
-    // Показ обработанного изображения
-    imshow("Processed Image", blurredImage);
+// Accumulate points
+void Point5D::MSPoint5DAccum(Point5D Pt) {
+	x += Pt.x;
+	y += Pt.y;
+	l += Pt.l;
+	a += Pt.a;
+	b += Pt.b;
+}
 
-    // Применение пороговой обработки для исключения черного цвета (порог = 30)
-    cv::Mat binaryImage;
-    threshold(blurredImage, binaryImage, 30, 255, cv::THRESH_BINARY);
+// Copy a point
+void Point5D::MSPoint5DCopy(Point5D Pt) {
+	x = Pt.x;
+	y = Pt.y;
+	l = Pt.l;
+	a = Pt.a;
+	b = Pt.b;
+}
 
-    // Обнаружение границ с помощью оператора Canny
-    cv::Mat edges;
-    Canny(blurredImage, edges, 50, 150);
+// Compute color space distance between two points
+float Point5D::MSPoint5DColorDistance(Point5D Pt) {
+	return sqrt((l - Pt.l) * (l - Pt.l) + (a - Pt.a) * (a - Pt.a) + (b - Pt.b) * (b - Pt.b));
+}
 
-    // Показ изображения с обнаруженными границами
-    cv::imshow("Edges", edges);
+// Compute spatial space distance between two points
+float Point5D::MSPoint5DSpatialDistance(Point5D Pt) {
+	return sqrt((x - Pt.x) * (x - Pt.x) + (y - Pt.y) * (y - Pt.y));
+}
 
-    // Поиск контуров на изображении границ
-    vector<vector<Point>> contours;
-    findContours(edges, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
+// Scale point
+void Point5D::MSPoint5DScale(float scale) {
+	x *= scale;
+	y *= scale;
+	l *= scale;
+	a *= scale;
+	b *= scale;
+}
 
-    // Перебор всех контуров для обработки каждого квадратика
-    for (const auto& contour : contours)
-    {
-        // Приближение контура к многоугольнику (в данном случае прямоугольнику)
-        vector<Point> approx;
-        approxPolyDP(contour, approx, arcLength(contour, true) * 0.05, true);
+// Set point value
+void Point5D::MSPOint5DSet(float px, float py, float pl, float pa, float pb) {
+	x = px;
+	y = py;
+	l = pl;
+	a = pa;
+	b = pb;
+}
 
-        // Проверка, что контур приближается к прямоугольнику
-        if (approx.size() == 4 && isContourConvex(approx))
-        {
-            // Определение цвета квадратика
-            Scalar squareColor = findSquareColor(src, approx);
+// Print 5D point
+void Point5D::Print() {
+	cout << x << " " << y << " " << l << " " << a << " " << b << endl;
+}
 
-            // Рисование контура квадратика на исходном изображении
-            polylines(src, approx, true, Scalar(0, 255, 0), 2);
+// Constructor for spatial bandwidth and color bandwidth
+MeanShift::MeanShift(float s, float r) {
+	hs = s;
+	hr = r;
+}
 
-            // Вывод цвета квадратика
-            cout << "Square Color: B = " << squareColor[0] << ", G = " << squareColor[1] << ", R = " << squareColor[2] << endl;
-        }
-    }
+// Mean Shift Filtering
+void MeanShift::MSFiltering(Mat& Img) {
+	int ROWS = Img.rows;			// Get row number
+	int COLS = Img.cols;			// Get column number
+	split(Img, IMGChannels);		// Split Lab color
 
-    // Отображение результата
-    imshow("Detected Squares", src);*/
+	Point5D PtCur;					// Current point
+	Point5D PtPrev;					// Previous point
+	Point5D PtSum;					// Sum vector of the shift vector
+	Point5D Pt;
+	int Left;						// Left boundary
+	int Right;						// Right boundary
+	int Top;						// Top boundary
+	int Bottom;						// Bottom boundary
+	int NumPts;						// number of points in a hypersphere
+	int step;
+
+	for (int i = 0; i < ROWS; i++) {
+		for (int j = 0; j < COLS; j++) {
+			Left = (j - hs) > 0 ? (j - hs) : 0;						// Get Left boundary of the filter
+			Right = (j + hs) < COLS ? (j + hs) : COLS;				// Get Right boundary of the filter
+			Top = (i - hs) > 0 ? (i - hs) : 0;						// Get Top boundary of the filter
+			Bottom = (i + hs) < ROWS ? (i + hs) : ROWS;				// Get Bottom boundary of the filter
+			// Set current point and scale it to Lab color range
+			PtCur.MSPOint5DSet(i, j, (float)IMGChannels[0].at<uchar>(i, j), (float)IMGChannels[1].at<uchar>(i, j), (float)IMGChannels[2].at<uchar>(i, j));
+			PtCur.PointLab();
+			step = 0;				// count the times
+			do {
+				PtPrev.MSPoint5DCopy(PtCur);						// Set the original point and previous one
+				PtSum.MSPOint5DSet(0, 0, 0, 0, 0);					// Initial Sum vector
+				NumPts = 0;											// Count number of points that satisfy the bandwidths
+				for (int hx = Top; hx < Bottom; hx++) {
+					for (int hy = Left; hy < Right; hy++) {
+						// Set point in the spatial bandwidth
+						Pt.MSPOint5DSet(hx, hy, (float)IMGChannels[0].at<uchar>(hx, hy), (float)IMGChannels[1].at<uchar>(hx, hy), (float)IMGChannels[2].at<uchar>(hx, hy));
+						Pt.PointLab();
+
+						// Check it satisfied color bandwidth or not
+						if (Pt.MSPoint5DColorDistance(PtCur) < hr) {
+							PtSum.MSPoint5DAccum(Pt);				// Accumulate the point to Sum vector
+							NumPts++;								// Count
+						}
+					}
+				}
+				PtSum.MSPoint5DScale(1.0 / NumPts);					// Scale Sum vector to average vector
+				PtCur.MSPoint5DCopy(PtSum);							// Get new origin point
+				step++;												// One time end
+				// filter iteration to end
+			} while ((PtCur.MSPoint5DColorDistance(PtPrev) > MS_MEAN_SHIFT_TOL_COLOR) && (PtCur.MSPoint5DSpatialDistance(PtPrev) > MS_MEAN_SHIFT_TOL_SPATIAL) && (step < MS_MAX_NUM_CONVERGENCE_STEPS));
+
+			// Scale the color
+			PtCur.PointRGB();
+			// Copy the result to image
+			Img.at<Vec3b>(i, j) = Vec3b(PtCur.l, PtCur.a, PtCur.b);
+		}
+	}
+}
+
+void MeanShift::MSSegmentation(Mat& Img) {
+
+	//---------------- Mean Shift Filtering -----------------------------
+		// Same as MSFiltering function
+	int ROWS = Img.rows;
+	int COLS = Img.cols;
+	split(Img, IMGChannels);
+
+	Point5D PtCur;
+	Point5D PtPrev;
+	Point5D PtSum;
+	Point5D Pt;
+	int Left;
+	int Right;
+	int Top;
+	int Bottom;
+	int NumPts;					// number of points in a hypersphere
+	int step;
+
+	for (int i = 0; i < ROWS; i++) {
+		for (int j = 0; j < COLS; j++) {
+			Left = (j - hs) > 0 ? (j - hs) : 0;
+			Right = (j + hs) < COLS ? (j + hs) : COLS;
+			Top = (i - hs) > 0 ? (i - hs) : 0;
+			Bottom = (i + hs) < ROWS ? (i + hs) : ROWS;
+			PtCur.MSPOint5DSet(i, j, (float)IMGChannels[0].at<uchar>(i, j), (float)IMGChannels[1].at<uchar>(i, j), (float)IMGChannels[2].at<uchar>(i, j));
+			PtCur.PointLab();
+			step = 0;
+			do {
+				PtPrev.MSPoint5DCopy(PtCur);
+				PtSum.MSPOint5DSet(0, 0, 0, 0, 0);
+				NumPts = 0;
+				for (int hx = Top; hx < Bottom; hx++) {
+					for (int hy = Left; hy < Right; hy++) {
+
+						Pt.MSPOint5DSet(hx, hy, (float)IMGChannels[0].at<uchar>(hx, hy), (float)IMGChannels[1].at<uchar>(hx, hy), (float)IMGChannels[2].at<uchar>(hx, hy));
+						Pt.PointLab();
+
+						if (Pt.MSPoint5DColorDistance(PtCur) < hr) {
+							PtSum.MSPoint5DAccum(Pt);
+							NumPts++;
+						}
+					}
+				}
+				PtSum.MSPoint5DScale(1.0 / NumPts);
+				PtCur.MSPoint5DCopy(PtSum);
+				step++;
+			} while ((PtCur.MSPoint5DColorDistance(PtPrev) > MS_MEAN_SHIFT_TOL_COLOR) && (PtCur.MSPoint5DSpatialDistance(PtPrev) > MS_MEAN_SHIFT_TOL_SPATIAL) && (step < MS_MAX_NUM_CONVERGENCE_STEPS));
+
+			PtCur.PointRGB();
+			Img.at<Vec3b>(i, j) = Vec3b(PtCur.l, PtCur.a, PtCur.b);
+		}
+	}
+	//--------------------------------------------------------------------
+
+	//----------------------- Segmentation ------------------------------
+	int RegionNumber = 0;			// Reigon number
+	int label = -1;					// Label number
+	float* Mode = new float[ROWS * COLS * 3];					// Store the Lab color of each region
+	int* MemberModeCount = new int[ROWS * COLS];				// Store the number of each region
+	memset(MemberModeCount, 0, ROWS * COLS * sizeof(int));		// Initialize the MemberModeCount
+	split(Img, IMGChannels);
+	// Label for each point
+	int** Labels = new int* [ROWS];
+	for (int i = 0; i < ROWS; i++)
+		Labels[i] = new int[COLS];
+
+	// Initialization
+	for (int i = 0; i < ROWS; i++) {
+		for (int j = 0; j < COLS; j++) {
+			Labels[i][j] = -1;
+		}
+	}
+
+	for (int i = 0; i < ROWS; i++) {
+		for (int j = 0; j < COLS;j++) {
+			// If the point is not being labeled
+			if (Labels[i][j] < 0) {
+				Labels[i][j] = ++label;		// Give it a new label number
+				// Get the point
+				PtCur.MSPOint5DSet(i, j, (float)IMGChannels[0].at<uchar>(i, j), (float)IMGChannels[1].at<uchar>(i, j), (float)IMGChannels[2].at<uchar>(i, j));
+				PtCur.PointLab();
+
+				// Store each value of Lab
+				Mode[label * 3 + 0] = PtCur.l;
+				Mode[label * 3 + 1] = PtCur.a;
+				Mode[label * 3 + 2] = PtCur.b;
+
+				// Region Growing 8 Neighbours
+				vector<Point5D> NeighbourPoints;
+				NeighbourPoints.push_back(PtCur);
+				while (!NeighbourPoints.empty()) {
+					Pt = NeighbourPoints.back();
+					NeighbourPoints.pop_back();
+
+					// Get 8 neighbours
+					for (int k = 0; k < 8; k++) {
+						int hx = Pt.x + dxdy[k][0];
+						int hy = Pt.y + dxdy[k][1];
+						if ((hx >= 0) && (hy >= 0) && (hx < ROWS) && (hy < COLS) && (Labels[hx][hy] < 0)) {
+							Point5D P;
+							P.MSPOint5DSet(hx, hy, (float)IMGChannels[0].at<uchar>(hx, hy), (float)IMGChannels[1].at<uchar>(hx, hy), (float)IMGChannels[2].at<uchar>(hx, hy));
+							P.PointLab();
+
+							// Check the color
+							if (PtCur.MSPoint5DColorDistance(P) < hr) {
+								// Satisfied the color bandwidth
+								Labels[hx][hy] = label;				// Give the same label					
+								NeighbourPoints.push_back(P);		// Push it into stack
+								MemberModeCount[label]++;			// This region number plus one
+								// Sum all color in same region
+								Mode[label * 3 + 0] += P.l;
+								Mode[label * 3 + 1] += P.a;
+								Mode[label * 3 + 2] += P.b;
+							}
+						}
+					}
+				}
+				MemberModeCount[label]++;							// Count the point itself
+				Mode[label * 3 + 0] /= MemberModeCount[label];		// Get average color
+				Mode[label * 3 + 1] /= MemberModeCount[label];
+				Mode[label * 3 + 2] /= MemberModeCount[label];
+			}
+		}
+	}
+	RegionNumber = label + 1;										// Get region number
+
+	// Get result image from Mode array
+	for (int i = 0; i < ROWS; i++) {
+		for (int j = 0; j < COLS; j++) {
+			label = Labels[i][j];
+			float l = Mode[label * 3 + 0];
+			float a = Mode[label * 3 + 1];
+			float b = Mode[label * 3 + 2];
+			Point5D Pixel;
+			Pixel.MSPOint5DSet(i, j, l, a, b);
+			Pixel.PointRGB();
+			//			Pixel.Print();
+			Img.at<Vec3b>(i, j) = Vec3b(Pixel.l, Pixel.a, Pixel.b);
+		}
+	}
+	//--------------------------------------------------------------------
+
+	//	for(int i = 0; i < ROWS; i++){
+	//		for(int j = 0; j < COLS - 1; j++){
+	//			if(Labels[i][j] != Labels[i][j + 1])
+	//				Img.at<Vec3b>(i, j) = Vec3b(255, 255, 255);
+	//		}
+	//	}
+
+	//--------------- Delete Memory Applied Before -----------------------
+	delete[] Mode;
+	delete[] MemberModeCount;
+
+	for (int i = 0; i < ROWS; i++)
+		delete[] Labels[i];
+	delete[] Labels;
+}
+
+Scalar getAverageColor(const Mat& image, const vector<Point>& contour) {
+	Mat mask = Mat::zeros(image.size(), CV_8UC1);
+	drawContours(mask, vector<vector<Point>>{contour}, -1, Scalar(255), FILLED);
+	Scalar meanColor = mean(image, mask);
+	return meanColor;
+}
+
+void remove(std::vector<vector<Point>>& v, size_t index) {
+	v.erase(v.begin() + index);
+}
+
+int main() {
+	// Load image
+	Mat Img = imread("C:/Users/kvale/Desktop/CV/misis2024s-21-02-koda-v-d/prj.cw/cw/img_3.jpg");
+	resize(Img, Img, Size(Img.cols / 2, Img.rows / 2), 0, 0, 1);
+	// Show that image
+	namedWindow("The Original Picture");
+	imshow("The Original Picture", Img);
+
+	// Convert color from RGB to Lab
+	cvtColor(Img, Img, COLOR_RGB2Lab);
+
+	// Initilize Mean Shift with spatial bandwith and color bandwith
+	MeanShift MSProc(8, 16);
+	// Filtering Process
+	MSProc.MSFiltering(Img);
+	// Segmentation Process include Filtering Process (Region Growing)
+//	MSProc.MSSegmentation(Img);
+
+	// Print the bandwith
+	cout << "the Spatial Bandwith is " << MSProc.hs << endl;
+	cout << "the Color Bandwith is " << MSProc.hr << endl;
+
+	// Convert color from Lab to RGB
+	cvtColor(Img, Img, COLOR_Lab2RGB);
+
+	// Show the result image
+	namedWindow("MS Picture");
+	imshow("MS Picture", Img);
+
+	imwrite("C:/Users/kvale/Desktop/CV/misis2024s-21-02-koda-v-d/prj.cw/cw/img_3_MS.jpg", Img);
 
 
-    //ЦВЕТОВАЯ СИГМЕНТАЦИЯ 
+	// РџСЂРµРѕР±СЂР°Р·РѕРІР°РЅРёРµ СЂРµР·СѓР»СЊС‚Р°С‚Р° Mean Shift РІ РѕС‚С‚РµРЅРєРё СЃРµСЂРѕРіРѕ
+	Mat gray;
+	cvtColor(Img, gray, COLOR_BGR2GRAY);
 
-    const int GREEN_MIN = 60;
-    const int GREEN_MAX = 98;
+	// РџСЂРёРјРµРЅРµРЅРёРµ Р°Р»РіРѕСЂРёС‚РјР° Canny РґР»СЏ РЅР°С…РѕР¶РґРµРЅРёСЏ РіСЂР°РЅРёС†
+	Mat edges;
+	Canny(gray, edges, 100, 200);
 
-    const int BLUE_MIN =100;
-    const int BLUE_MAX = 127;
+	// РќР°С…РѕР¶РґРµРЅРёРµ РєРѕРЅС‚СѓСЂРѕРІ
+	vector<vector<Point>> contours;
+	vector<Vec4i> hierarchy;
+	findContours(edges, contours, hierarchy, RETR_TREE, CHAIN_APPROX_SIMPLE);
+	// Р РёСЃРѕРІР°РЅРёРµ РєРѕРЅС‚СѓСЂРѕРІ Рё РѕРїСЂРµРґРµР»РµРЅРёРµ С†РІРµС‚РѕРІ
+	Mat output = Img.clone();
 
-    const int YELLOW_MIN = 20;
-    const int YELLOW_MAX = 60;
+	//float sum = 0;
+	//for (size_t i = 0; i < contours.size(); ++i)
+	//	sum += contours[i].size();
+	//sum /= contours.size();
+	//cout << "average size " << sum << endl;
 
-    Mat img = imread("C:/Users/kvale/Desktop/CV/misis2024s-21-02-koda-v-d/prj.cw/cw/img.jpg"); //Исходное изображение
-    imshow("input", img);
-    
+	//int j = 0;
+	//while  (j < contours.size()) {
+	//	if (contours[j].size() < sum)
+	//		remove(contours, j);
+	//	else
+	//		j++;
+	//}
 
-    //Удаляем фон
-    cv::Mat out_green = segment( GREEN_MIN, GREEN_MAX);
-    //imshow("Green segment", out_green);
+	for (size_t i = 0; i < contours.size(); ++i) {
 
-    cv::Mat out_blue = segment(BLUE_MIN, BLUE_MAX);
-    //imshow("Blue segment", out_blue);
+		drawContours(output, contours, (int)i, Scalar(0, 255, 0), 2);
 
-    cv::Mat out_red = segment(YELLOW_MIN, YELLOW_MAX);
-    cv::imshow("Red segment", out_red);
-   
-    waitKey(0);
+		// РџРѕР»СѓС‡РµРЅРёРµ СЃСЂРµРґРЅРµРіРѕ С†РІРµС‚Р° РІРЅСѓС‚СЂРё РєРѕРЅС‚СѓСЂР°
+		Scalar color = getAverageColor(Img, contours[i]);
+		cout << "Number " << i << " average color: " << color << "Size contours " << contours[i].size() << endl;
 
-    return 0;
+		// РћС‚РѕР±СЂР°Р¶РµРЅРёРµ С†РІРµС‚Р° РЅР° РёР·РѕР±СЂР°Р¶РµРЅРёРё
+		Moments M = moments(contours[i]);
+		int cx = int(M.m10 / M.m00);
+		int cy = int(M.m01 / M.m00);
+		circle(output, Point(cx, cy), 5, color, -1);
+	}
+
+	imshow("Contours", output);
+	imwrite("C:/Users/kvale/Desktop/CV/misis2024s-21-02-koda-v-d/prj.cw/cw/img_3_res.jpg", output);
+
+
+
+
+	waitKey();
+	return 1;
 }
