@@ -1,6 +1,6 @@
 **Лабораторная работа №9**
 
-Метод цветокоррекции Grey World image
+>Метод цветокоррекции Grey World image
 
 <img src="https://github.com/eklerka72/misis2024s-21-02-koda-v-d/assets/114610149/2f989d99-0201-4b85-973a-bf398048f152" width="425"/> 
 <img src="https://github.com/eklerka72/misis2024s-21-02-koda-v-d/assets/114610149/35578136-5997-433d-a5fc-52492b5e1f13" width="425"/> 
