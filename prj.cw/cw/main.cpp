@@ -129,7 +129,7 @@ std::vector<std::vector<cv::Point>> detectAllSquares(cv::Mat img) {
 }
 
 void simpleDetection() {
-  cv::Mat img = cv::imread("prj.cw/cw/images/2.jpg");
+  cv::Mat img = cv::imread("../prj.cw/cw/images/2.jpg");
   auto detect = detectAllSquares(img);
   std::cout << detect.size();
   cv::drawContours(img, detect, -1, cv::Scalar(255, 255, 255), 10);
@@ -139,10 +139,10 @@ void simpleDetection() {
 
 void qualityDataset() {
   cv::FileStorage file =
-      cv::FileStorage("C:/Users/kvale/Desktop/CV/misis2024s-21-02-koda-v-d/prj.cw/cw/images/SI_json.json", cv::FileStorage::READ);
+      cv::FileStorage("../prj.cw/cw/images/SI_json.json", cv::FileStorage::READ);
   auto standard = parser(file);
   for (auto i : standard) {
-    cv::Mat img = cv::imread("C:/Users/kvale/Desktop/CV/misis2024s-21-02-koda-v-d/prj.cw/cw/images/" + i.first);
+    cv::Mat img = cv::imread("../prj.cw/cw/images/" + i.first);
     auto detect = detectAllSquares(img);
     std::set<int> obj;
     double count = 0;
@@ -158,11 +158,11 @@ void qualityDataset() {
       }
       // cv::polylines(img, j, true, cv::Scalar(255, 0, 0), 10);
     }
-    cv::drawContours(img, detect, 2, cv::Scalar(0, 0, 0), 3);
+    // cv::drawContours(img, detect, 2, cv::Scalar(0, 0, 0), 3);
     std::cout << i.first << " " << count/i.second.size() << "\n";
-    cv::imshow(i.first, img);
+    // cv::imshow(i.first, img);
   }
-  cv::waitKey(-1);
+  // cv::waitKey(-1);
 }
 
 int main() {
